@@ -146,7 +146,7 @@
     data.addRows(window.Data.CycleTimeChart.slice(-12));
 
     var options = {
-      title: 'Project Cycle Time in Days, Last 12 Months',
+      title: 'Milestone Cycle Time in Days, Last 12 Months',
       titleTextStyle: { fontSize: 16 },
       focusTarget: 'category',
       chartArea: chartAreaOptions,
@@ -156,39 +156,39 @@
     chart.draw(data, options);
   }
 
-  function renderProjectSelect() {
-    var element = document.getElementById('project-selector');
-    var html = '<option>Select Project...</option>';
-    window.ClubhouseProjects.forEach(function (project) {
-      html += '<option value="' + project.id + '">' + project.name + '</option>';
+  function renderMilestoneSelect() {
+    var element = document.getElementById('milestone-selector');
+    var html = '<option>Select Milestone...</option>';
+    window.ClubhouseMilestones.forEach(function (milestone) {
+      html += '<option value="' + milestone.id + '">' + milestone.name + '</option>';
     });
 
     element.innerHTML = html;
     window.scrollTo(0, 0);
   }
 
-  function getSelectedProjectID() {
-    var element = document.getElementById('project-selector');
+  function getSelectedMilestoneID() {
+    var element = document.getElementById('milestone-selector');
     return element.options[element.selectedIndex].value;
   }
 
-  window.onProjectSelect = function () {
-    var id = getSelectedProjectID();
+  window.onMilestoneSelect = function () {
+    var id = getSelectedMilestoneID();
     window.Data = null;
-    loadScript('data/project-' + id + '.js');
+    loadScript('data/milestone-' + id + '.js');
     clearTimeout(timeout);
     renderCharts();
   };
 
-  function renderNoDataForProject() {
+  function renderNoDataForMilestone() {
     var element = document.getElementById('no-chart-found');
-    element.innerHTML = 'No data found for this project! Run <code>node fetch.js ' + getSelectedProjectID() + '</code> in your terminal to generate the data.';
+    element.innerHTML = 'No data found for this milestone! Run <code>node fetch.js ' + getSelectedMilestoneID() + '</code> in your terminal to generate the data.';
     element.style.display = 'block';
 
     document.getElementById('chart-container').style.display = 'none';
   }
 
-  function hideNoDataForProject() {
+  function hideNoDataForMilestone() {
     var element = document.getElementById('no-chart-found');
     element.innerHTML = '';
     element.style.display = 'none';
@@ -209,7 +209,7 @@
     }
 
     if (counter > 5) {
-      renderNoDataForProject();
+      renderNoDataForMilestone();
       return false;
     }
 
@@ -221,7 +221,7 @@
       return false;
     }
 
-    hideNoDataForProject();
+    hideNoDataForMilestone();
     renderLastFetched();
 
     renderCurrentStoryTypeRatioChart();
@@ -238,7 +238,7 @@
 
   function init() {
     initGoogleLibrary();
-    renderProjectSelect();
+    renderMilestoneSelect();
   }
 
   init();

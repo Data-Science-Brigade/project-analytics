@@ -6,23 +6,39 @@ var request = require('request');
 
 var MILLISECONDS_IN_A_DAY = 1000 * 60 * 60 * 24;
 var DATE_FORMAT = 'YYYY-MM-DD';
-var PROJECT_FILE = 'data/projects.js';
+var MILESTONE_FILE = 'data/milestones.js';
 
 var TOKEN = process.env.CLUBHOUSE_API_TOKEN;
 
-function fetchProjects(callback) {
+function fetchMilestones(callback) {
   request({
-    url: 'https://api.clubhouse.io/api/beta/projects?token=' + TOKEN,
+    url: 'https://api.clubhouse.io/api/v3/milestones?token=' + TOKEN,
     json: true
   }, callback);
 }
 
-function fetchCompletedStoriesForProject(projectID, callback) {
+function fetchMilestoneEpics(milestoneID, callback) {
   request({
-    url: 'https://api.clubhouse.io/api/beta/stories/search?token=' + TOKEN,
+    url: 'https://api.clubhouse.io/api/v3/milestones/' + milestoneID + '/epics?token=' + TOKEN,
+    json: true
+  }, callback);
+}
+
+function fetchCompletedStoriesForEpic(epicName, callback) {
+  request({
+    url: 'https://api.clubhouse.io/api/v3/search/stories?token=' + TOKEN,
+    method: 'GET',
+    json: true,
+    body: { query: 'epic:"' + epicName + '"' }
+  }, callback);
+}
+
+function fetchCompletedStoriesForMilestone(milestoneID, callback) {
+  request({
+    url: 'https://api.clubhouse.io/api/v3/search/stories?token=' + TOKEN,
     method: 'POST',
     json: true,
-    body: { archived: false, project_ids: [projectID], workflow_state_types: ['done'] }
+    body: { archived: false, milestone_ids: [milestoneID], workflow_state_types: ['done'] }
   }, callback);
 }
 
@@ -41,7 +57,7 @@ function createDateRange(fromDate, toDate) {
 
 function storiesToCompletedTimestamps(stories) {
   return _.map(stories, function (story) {
-    return new Date(story.completed_at).getTime();
+    return new Date(story.created_at).getTime();
   });
 }
 
@@ -64,15 +80,14 @@ function calculateStoryRatioData(stories, dateRange) {
 
   _.each(dateRange, function (day) {
     _.each(stories, function (story) {
-      if (story.completed_at.split('T')[0] === day) {
+      // Measure by points:
+      // if (story.estimate) {
+      //   totals[story.story_type] += story.estimate;
+      // }
+      if (story.completed && story.completed_at.split('T')[0] === day) {
         // Measure by story count:
         totals[story.story_type] += 1;
         totals.total += 1;
-
-        // Measure by points:
-        // if (story.estimate) {
-        //   totals[story.story_type] += story.estimate;
-        // }
       }
     });
     data += '  [new Date("' + day + '"), ' + (totals.feature / totals.total) + ', ' + (totals.bug / totals.total) + ', ' + (totals.chore / totals.total) + '],\n';
@@ -93,14 +108,13 @@ function calculateStoryTypeData(stories, dateRange) {
 
   _.each(dateRange, function (day) {
     _.each(stories, function (story) {
-      if (story.completed_at.split('T')[0] === day) {
+      // Measure by points:
+      // if (story.estimate) {
+      //   totals[story.story_type] += story.estimate;
+      // }
+      if (story.completed && story.completed_at.split('T')[0] === day) {
         // Measure by story count:
         totals[story.story_type] += 1;
-
-        // Measure by points:
-        // if (story.estimate) {
-        //   totals[story.story_type] += story.estimate;
-        // }
       }
     });
     data += '  [new Date("' + day + '"), ' + totals.feature + ', ' + totals.bug + ', ' + totals.chore + '],\n';
@@ -117,14 +131,13 @@ function calculateMonthlyVelocityChartData(stories, dateRange) {
 
   _.each(dateRange, function (day) {
     _.each(stories, function (story) {
-      if (story.completed_at.split('T')[0] === day) {
+      // Measure by points:
+      // if (story.estimate) {
+      //   velocity += story.estimate;
+      // }
+      if (story.completed && story.completed_at.split('T')[0] === day) {
         // Measure by story count:
         velocity += 1;
-
-        // Measure by points:
-        // if (story.estimate) {
-        //   velocity += story.estimate;
-        // }
       }
     });
 
@@ -145,11 +158,13 @@ function calculateCycleTimeChartData(stories, dateRange) {
 
   _.each(dateRange, function (day) {
     _.each(stories, function (story) {
+      if (story.completed) {
       if (story.completed_at.split('T')[0] === day) {
         var cycleTime = (new Date(story.completed_at).getTime() - new Date(story.started_at).getTime()) / MILLISECONDS_IN_A_DAY;
 
         cycleTimes.push(cycleTime);
       }
+    }
     });
 
     if (day.split('-')[2] === '01') {
@@ -181,93 +196,104 @@ function calculateEstimateChartData(stories) {
   return data;
 }
 
-function compileChartData(stories, project) {
+function compileChartData(stories, milestone) {
   console.log('Compiling story data...');
   stories = _.sortBy(stories, function (story) {
     return new Date(story.completed_at).getTime();
   });
 
   var dateRange = calculateDateRangeForStories(stories);
+  // console.log(dateRange)
 
-  var data = 'var Data = {}; Data.ProjectName = "' + project.name + '"; Data.LastFetched="' + moment().format('MMMM D, YYYY') + '"; ';
+  var data = 'var Data = {}; Data.MilestoneName = "' + milestone.name + '"; Data.LastFetched="' + moment().format('MMMM D, YYYY') + '"; ';
+  console.log("Number of stories: " + stories.length)
   data += calculateStoryTypeData(stories, dateRange);
   data += calculateStoryRatioData(stories, dateRange);
   data += calculateMonthlyVelocityChartData(stories, dateRange);
   data += calculateCycleTimeChartData(stories, dateRange);
   data += calculateEstimateChartData(stories);
 
-  fs.writeFileSync('data/project-' + project.id + '.js', data);
+  fs.writeFileSync('data/milestone-' + milestone.id + '.js', data);
 }
 
-function saveProjectsToFile(projects) {
-  var data = 'var ClubhouseProjects = [];';
-  _.each(_.filter(projects, { archived: false }), function (project) {
-    data += 'ClubhouseProjects.push({ id: ' + project.id + ', name: "' + project.name + '" });';
+function saveMilestonesToFile(milestones) {
+  var data = 'var ClubhouseMilestones = [];';
+  _.each(_.filter(milestones, { completed: false }), function (milestone) {
+    data += 'ClubhouseMilestones.push({ id: ' + milestone.id + ', name: "' + milestone.name + '" });';
   });
-  _.each(_.filter(projects, { archived: true }), function (project) {
-    data += 'ClubhouseProjects.push({ id: ' + project.id + ', name: "' + project.name + ' (archived)" });';
+  _.each(_.filter(milestones, { completed: true }), function (milestone) {
+    data += 'ClubhouseMilestones.push({ id: ' + milestone.id + ', name: "' + milestone.name + ' (completed)" });';
   });
-  fs.writeFileSync(PROJECT_FILE, data);
+  fs.writeFileSync(MILESTONE_FILE, data);
 }
 
-function fetchAndCompileChartForProject(project, callback) {
+function fetchAndCompileChartForMilestone(milestone, callback) {
   callback = _.isFunction(callback) ? callback : _.noop;
-  console.log('Fetching completed stories for project "' + project.name + '"...');
+  console.log('Fetching completed stories for milestone "' + milestone.name + '"...');
 
-  fetchCompletedStoriesForProject(project.id, function (err, res, stories) {
-    compileChartData(stories, project);
-    callback();
+  fetchMilestoneEpics(milestone.id, function(err, res, epics){
+    var epic = epics.shift();
+    // TODO: Gotta implement a recursion just like line 255 and maybe paginate through stories
+
+    if (epic) {
+      console.log(epic.name)
+      fetchCompletedStoriesForEpic(epic.name, function (err, res, stories) {
+        compileChartData(stories.data, milestone);
+        callback();
+      });
+    }
   });
+
+
 }
 
-function fetchAndCompileChartsForAllProjects(projects) {
-  var project = projects.shift();
+function fetchAndCompileChartsForAllMilestones(milestones) {
+  var milestone = milestones.shift();
 
-  if (project) {
-    fetchAndCompileChartForProject(project, function () {
-      fetchAndCompileChartsForAllProjects(projects);
+  if (milestone) {
+    fetchAndCompileChartForMilestone(milestone, function () {
+      fetchAndCompileChartsForAllMilestones(milestones);
     });
   }
 }
 
-function findMatchingProjects(projects, query) {
+function findMatchingMilestones(milestones, query) {
   if (query === 'all') {
-    return _.filter(projects, { archived: false });
+    return _.filter(milestones, { completed: false });
   }
 
-  return _.filter(projects, function (project) {
-    return parseInt(query, 10) === project.id || project.name.toLowerCase().indexOf(query) === 0;
+  return _.filter(milestones, function (milestone) {
+    return parseInt(query, 10) === milestone.id || milestone.name.toLowerCase().indexOf(query) === 0;
   });
 }
 
-function compileProjectData() {
+function compileMilestoneData() {
   var query = process.argv[2];
-  console.log('Fetching projects...');
+  console.log('Fetching milestones...');
 
-  fetchProjects(function (err, res, projects) {
-    if (err || !projects || projects.length === 0) {
-      console.log('No projects found!');
+  fetchMilestones(function (err, res, milestones) {
+    if (err || !milestones || milestones.length === 0) {
+      console.log('No milestones found!');
       return false;
     }
 
-    projects = _.sortBy(projects, 'name');
-    saveProjectsToFile(projects);
+    milestones = _.sortBy(milestones, 'name');
+    saveMilestonesToFile(milestones);
 
-    var foundProjects = findMatchingProjects(projects, query);
-    if (!query || foundProjects.length === 0) {
-      if (foundProjects.length === 0) {
-        console.log('Matching project not found!');
-      }
-      console.log('You have access to the following projects:\n');
+   var foundMilestones = findMatchingMilestones(milestones, query);
+   if (!query || foundMilestones.length === 0) {
+     if (foundMilestones.length === 0) {
+       console.log('Matching milestone not found!');
+     }
+     console.log('You have access to the following milestones:\n');
+       milestones.forEach(function (milestone) {
+       console.log('  - ' + milestone.name);
+     });
 
-      projects.forEach(function (project) {
-        console.log('  - ' + project.name);
-      });
+     return false;
+   }
 
-      return false;
-    }
-
-    fetchAndCompileChartsForAllProjects(foundProjects);
+   fetchAndCompileChartsForAllMilestones(foundMilestones);
   });
 }
 
@@ -283,7 +309,7 @@ function init() {
     return displayNoTokenMessage();
   }
 
-  compileProjectData();
+  compileMilestoneData();
 }
 
 init();

@@ -31,7 +31,7 @@ h1 {
   margin: 0 0 14px;
 }
 
-#project-selector-parent select {
+#milestone-selector-parent select {
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
   border-radius: 10px;
   font-size: 18px;
